@@ -6,7 +6,7 @@ spring:
     config:
       server:
         git:
-          uri: https://github.com/indiagator/code22-config-server-properties.git
+          uri: https://github.com/aj007/config-server-properties.git
           refresh-rate: 1
   zipkin:
     base-url: http://zipkin-server:9411
