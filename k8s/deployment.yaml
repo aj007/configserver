@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: configserver
+  labels:
+    app: configserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: configserver
+  template:
+    metadata:
+      labels:
+        app: configserver
+    spec:
+      containers:
+        - name: configserver
+          # This matches the IMAGE_NAME:IMAGE_TAG from your Jenkinsfile
+          image: configserver:latest
+          
+          # CRITICAL FOR DOCKER DESKTOP: Tells Kubernetes to use the local 
+          # docker image cache instead of trying to pull it from Docker Hub.
+          imagePullPolicy: IfNotPresent
+          
+          ports:
+            - containerPort: 8080 # Change this to your application's internal port
+          
+          # Optional: Environment variables for your Spring Boot / Maven app
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "dev"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: configserver
+spec:
+  type: NodePort
+  selector:
+    app: configserver
+  ports:
+    - protocol: TCP
+      port: 8080        # The port the service exposes inside the cluster
+      targetPort: 8080  # The port your container is listening on
+      nodePort: 30080   # Exposes your app at http://localhost:30080 on your host machine

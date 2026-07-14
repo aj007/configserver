@@ -2,64 +2,65 @@ pipeline {
     agent any
 
     tools {
-        // Automatically installs and configures the Maven tool named 'Maven3' in Jenkins
-        maven 'Maven3'
-        // Automatically installs and configures the JDK tool named 'JDK17' in Jenkins
-        jdk 'JDK17'
+        // Automatically adds the Maven bin directory to the PATH
+        maven 'LocalMaven'
     }
 
     environment {
-        // Defines the app name for easier organization later
-        APP_NAME = 'configserver'
+        // Replace with your repository and image details
+        GIT_REPO_URL    = 'https://github.com/aj007/configserver.git'
+        GIT_BRANCH      = 'master'
+        IMAGE_NAME      = 'configserver'
+        IMAGE_TAG       = "${BUILD_NUMBER}"
+        // REGISTRY_USER   = 'your-dockerhub-username' // Leave empty if deploying locally only
+
+        // Path to your kubeconfig if Jenkins cannot find it automatically
+        KUBECONFIG_PATH = 'C:\\ProgramData\\Jenkins\\.kube\\config'
     }
 
     stages {
-        stage('Checkout') {
+        stage('Checkout Code') {
             steps {
-                // Fetches code from your repository. 
-                // Jenkins automatically handles this stage if you use a Pipeline from SCM job.
-                checkout scm
+                echo 'Pulling latest code from Git...'
+                git branch: "${ENVIRONMENT.GIT_BRANCH}",
+                    url: "${ENVIRONMENT.GIT_REPO_URL}"
             }
         }
 
-        stage('Clean & Compile') {
+        stage('Maven Build') {
             steps {
-                echo 'Compiling the application...'
-                sh 'mvn clean compile'
+                echo 'Building application with Maven...'
+                // Using 'bat' since your Jenkins is running on Windows
+                bat 'mvn clean install -DskipTests'
             }
         }
 
-        stage('Run Tests') {
+        stage('Build Docker Image') {
             steps {
-                echo 'Running unit tests...'
-                sh 'mvn test'
-            }
-            post {
-                always {
-                    // Captures and displays unit test results in the Jenkins UI
-                    junit '**/target/surefire-reports/*.xml'
-                }
+                echo 'Building Docker image...'
+                bat "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                bat "docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest"
             }
         }
 
-        stage('Package Application') {
+        stage('Deploy to Kubernetes (Docker Desktop)') {
             steps {
-                echo 'Packaging application into a JAR file...'
-                // Skips tests here since they ran in the previous stage
-                sh 'mvn package -DskipTests'
+                echo 'Deploying to local Kubernetes cluster...'
+                // Points kubectl to your Docker Desktop cluster config
+                bat "kubectl --kubeconfig=${KUBECONFIG_PATH} apply -f k8s/deployment.yaml"
+
+                // Force the deployment to pick up the newly built local image
+                bat "kubectl --kubeconfig=${KUBECONFIG_PATH} set image deployment/${IMAGE_NAME} ${IMAGE_NAME}=${IMAGE_NAME}:${IMAGE_TAG}"
             }
         }
     }
 
     post {
         success {
-            echo "Archiving build artifacts..."
-            // Saves the generated JAR file in Jenkins so you can download it later
-            archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true
-            echo "🎉 Build completed successfully!"
+            echo 'Pipeline completed successfully!'
         }
         failure {
-            echo "❌ Build failed. Please check the console logs."
+            echo 'Pipeline failed. Check the logs above for errors.'
         }
     }
 }
