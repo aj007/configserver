@@ -21,14 +21,16 @@ pipeline {
     stages {
             stage('Checkout Code') {
                 steps {
-                    echo "Pulling latest code from Git branch: ${GIT_BRANCH}..."
-                    git branch: "${GIT_BRANCH}", url: "${GIT_REPO_URL}"
+                    echo "Pulling latest code from Git branch: ${env.GIT_BRANCH}..."
+                    git branch: "${env.GIT_BRANCH}",
+                        url: "${env.GIT_REPO_URL}"
                 }
             }
 
             stage('Maven Build') {
                 steps {
                     echo 'Building application with Maven...'
+                    // Using 'bat' since Jenkins is running on Windows
                     bat 'mvn clean install -DskipTests'
                 }
             }
@@ -36,27 +38,29 @@ pipeline {
             stage('Build Docker Image') {
                 steps {
                     echo 'Building Docker image...'
-                    bat "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
-                    bat "docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest"
+                    bat "docker build -t ${env.IMAGE_NAME}:${env.IMAGE_TAG} ."
+                    bat "docker tag ${env.IMAGE_NAME}:${env.IMAGE_TAG} ${env.IMAGE_NAME}:latest"
                 }
             }
 
             stage('Deploy to Kubernetes (Docker Desktop)') {
                 steps {
                     echo 'Deploying to local Kubernetes cluster...'
-                    bat "kubectl --kubeconfig=${KUBECONFIG_PATH} apply -f k8s/deployment.yaml"
-                    bat "kubectl --kubeconfig=${KUBECONFIG_PATH} set image deployment/${IMAGE_NAME} ${IMAGE_NAME}=${IMAGE_NAME}:${IMAGE_TAG}"
+                    // Applies the deployment manifest
+                    bat "kubectl --kubeconfig=${env.KUBECONFIG_PATH} apply -f k8s/deployment.yaml"
+
+                    // Forces the deployment to pull the newly built local image tag
+                    bat "kubectl --kubeconfig=${env.KUBECONFIG_PATH} set image deployment/${env.IMAGE_NAME} ${env.IMAGE_NAME}=${env.IMAGE_NAME}:${env.IMAGE_TAG}"
                 }
             }
         }
-    }
 
-    post {
-        success {
-            echo 'Pipeline completed successfully!'
-        }
-        failure {
-            echo 'Pipeline failed. Check the logs above for errors.'
+        post {
+            success {
+                echo 'Pipeline completed successfully!'
+            }
+            failure {
+                echo 'Pipeline failed. Check the logs above for errors.'
+            }
         }
     }
-}
