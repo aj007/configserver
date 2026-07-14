@@ -16,6 +16,8 @@ pipeline {
 
         // Path to your kubeconfig if Jenkins cannot find it automatically
         KUBECONFIG_PATH = 'C:\\ProgramData\\Jenkins\\.kube\\config'
+        // Explicitly defining the JDK path you configured
+        JAVA_HOME_PATH  = 'C:\\Anupa\\Software\\openlogic-openjdk-21.0.8+9-windows-x64'
     }
 
     stages {
@@ -30,8 +32,10 @@ pipeline {
             stage('Maven Build') {
                 steps {
                     echo 'Building application with Maven...'
-                    // Using 'bat' since Jenkins is running on Windows
-                    bat 'mvn clean install -DskipTests'
+                    // Injecting JAVA_HOME dynamically into the Windows execution context
+                    withEnv(["JAVA_HOME=${env.JAVA_HOME_PATH}", "PATH+JAVA=${env.JAVA_HOME_PATH}\\bin"]) {
+                        bat 'mvn clean install -DskipTests'
+                    }
                 }
             }
 
