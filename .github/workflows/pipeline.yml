@@ -1,0 +1,49 @@
+name: CI/CD Pipeline to Local K8s
+
+# Triggers the pipeline when pushing to the main branch
+on:
+  push:
+    branches: [ "master" ]
+  workflow_dispatch: # Allows you to trigger the run manually from the GitHub UI
+
+env:
+  IMAGE_NAME: configserver
+  # KUBECONFIG is a standard variable kubectl looks for automatically
+  KUBECONFIG: 'C:\Users\janup\.kube\config'
+
+jobs:
+  build-deploy:
+    # CRITICAL: To deploy to your local Docker Desktop, you must configure a
+    # self-hosted runner on your Windows machine and use the 'self-hosted' label.
+    # If you leave this as 'ubuntu-latest', it will run in the cloud and fail to find your local K8s.
+    runs-on: self-hosted
+
+    steps:
+      # 1. Checkout Code (Equivalent to git branch...)
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. Setup Java and Maven (Equivalent to tools { maven 'LocalMaven' })
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven # Automatically caches your ~/.m2 dependencies to speed up builds!
+
+      # 3. Maven Build
+      - name: Build with Maven
+        run: mvn clean install -DskipTests
+
+      # 4. Build and Tag Docker Image
+      - name: Build Docker Image
+        # github.run_number is the GitHub equivalent of Jenkins' BUILD_NUMBER
+        run: |
+          docker build -t ${{ env.IMAGE_NAME }}:${{ github.run_number }} .
+          docker tag ${{ env.IMAGE_NAME }}:${{ github.run_number }} ${{ env.IMAGE_NAME }}:latest
+
+      # 5. Deploy to Kubernetes
+      - name: Deploy to Docker Desktop Kubernetes
+        run: |
+          kubectl apply -f k8s/deployment.yaml
+          kubectl set image deployment/${{ env.IMAGE_NAME }} ${{ env.IMAGE_NAME }}=${{ env.IMAGE_NAME }}:${{ github.run_number }}
