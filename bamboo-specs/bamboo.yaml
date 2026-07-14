@@ -1,0 +1,54 @@
+---
+version: 2
+plan:
+  project-key: MSA
+  key: APP
+  name: MSA App Pipeline
+  description: Build Maven, Create Docker Image, and Deploy to local Kubernetes
+
+# Equivalent to the environment {} block in Jenkins
+variables:
+  IMAGE_NAME: configserver
+  # Update this to point to the actual user running the Bamboo Agent
+  KUBECONFIG_PATH: 'C:\Users\Anupa\.kube\config'
+
+stages:
+  - Build and Deploy:
+      manual: false
+      jobs:
+        - Build and Deploy Job
+
+Build and Deploy Job:
+  # This ensures the job runs on an agent that has these capabilities installed
+  requirements:
+    - system.builder.mvn2.Maven 3
+
+  tasks:
+    # 1. Checkout Code
+    - checkout:
+        force-clean-build: 'true'
+        description: Checkout repository
+
+    # 2. Maven Build
+    - script:
+        interpreter: cmd.exe
+        scripts:
+          - mvn clean install -DskipTests
+        description: Build application with Maven
+
+    # 3. Build and Tag Docker Image
+    - script:
+        interpreter: cmd.exe
+        # ${bamboo.buildNumber} is Bamboo's equivalent to Jenkins' ${BUILD_NUMBER}
+        scripts:
+          - docker build -t ${bamboo.IMAGE_NAME}:${bamboo.buildNumber} .
+          - docker tag ${bamboo.IMAGE_NAME}:${bamboo.buildNumber} ${bamboo.IMAGE_NAME}:latest
+        description: Build Docker Image
+
+    # 4. Deploy to Kubernetes
+    - script:
+        interpreter: cmd.exe
+        scripts:
+          - kubectl --kubeconfig=${bamboo.KUBECONFIG_PATH} apply -f k8s/deployment.yaml
+          - kubectl --kubeconfig=${bamboo.KUBECONFIG_PATH} set image deployment/${bamboo.IMAGE_NAME} ${bamboo.IMAGE_NAME}=${bamboo.IMAGE_NAME}:${bamboo.buildNumber}
+        description: Deploy to Docker Desktop Kubernetes
